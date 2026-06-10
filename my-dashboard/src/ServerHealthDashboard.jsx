@@ -12,6 +12,7 @@ import {
 import ErrorStatPanel from './ErrorStatPanel'
 import Panel from './Panel'
 import StatCard from './StatCard'
+import { servers } from './mockData'
 import { serverMetricsData } from './serverMetrics'
 
 const CHART_COLORS = {
@@ -50,6 +51,18 @@ const healthStatus = (score) => {
   }
 
   if (score >= 70) {
+    return 'amber'
+  }
+
+  return 'red'
+}
+
+const uptimeStatus = (value) => {
+  if (value >= 99) {
+    return 'green'
+  }
+
+  if (value >= 95) {
     return 'amber'
   }
 
@@ -488,6 +501,8 @@ function ServerHealthDashboard({ serverId }) {
   const currentMemory = last(selectedMetrics.memory.usage)
   const currentDisk = last(selectedMetrics.disk.usage)
   const currentPacketLoss = last(selectedMetrics.network.packetLossPercent)
+  const selectedServer = servers.find((server) => server.id === selectedMetrics.serverId)
+  const uptime = selectedServer?.uptime ?? 0
   const healthScore = Math.max(
     0,
     Math.min(
@@ -517,8 +532,13 @@ function ServerHealthDashboard({ serverId }) {
         </h3>
       </div>
 
-      <section className="grid gap-4 xl:grid-cols-4">
+      <section className="grid gap-4 xl:grid-cols-5">
         <HealthGauge score={healthScore} />
+        <StatCard
+          label="Server Uptime %"
+          value={formatPercent(uptime)}
+          statusColor={uptimeStatus(uptime)}
+        />
         <StatCard
           label="CPU Utilization %"
           value={formatPercent(currentCpu)}
