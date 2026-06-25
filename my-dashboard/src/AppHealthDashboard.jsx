@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import {
   CartesianGrid,
   Legend,
@@ -11,7 +12,6 @@ import {
 import HoneycombPanel from './HoneycombPanel'
 import Panel from './Panel'
 import StatCard from './StatCard'
-import { alerts, applicationSignals, goldenSignals, servers } from './mockData'
 
 const ENVS = ['PROD', 'DR']
 
@@ -332,7 +332,14 @@ function EnvHeader({ env }) {
   )
 }
 
-function EnvColumn({ env, onServerSelect }) {
+function EnvColumn({
+  alerts,
+  applicationSignals,
+  env,
+  goldenSignals,
+  servers,
+  onServerSelect,
+}) {
   const envServers = servers.filter((server) => server.env === env)
   const envAlerts = alerts.filter((alert) => alert.env === env)
   const envSignal = goldenSignals.find((signal) => signal.env === env)
@@ -423,7 +430,7 @@ function EnvBadge({ env }) {
   )
 }
 
-function ServerResourceOverview({ onServerSelect }) {
+function ServerResourceOverview({ servers, onServerSelect }) {
   const sortedServers = [...servers].sort((firstServer, secondServer) => {
     const envDifference =
       ENVS.indexOf(firstServer.env) - ENVS.indexOf(secondServer.env)
@@ -518,6 +525,59 @@ function ServerResourceOverview({ onServerSelect }) {
 }
 
 function AppHealthDashboard({ onServerSelect }) {
+  const [dashboardData, setDashboardData] = useState({
+    alerts: null,
+    applicationSignals: null,
+    goldenSignals: null,
+    servers: null,
+  })
+
+  useEffect(() => {
+    let ignore = false
+
+    async function fetchDashboardData() {
+      const [
+        alertsResponse,
+        applicationSignalsResponse,
+        goldenSignalsResponse,
+        serversResponse,
+      ] = await Promise.all([
+        fetch('/api/alerts'),
+        fetch('/api/application-signals'),
+        fetch('/api/golden-signals'),
+        fetch('/api/servers'),
+      ])
+
+      if (ignore) {
+        return
+      }
+
+      setDashboardData({
+        alerts: await alertsResponse.json(),
+        applicationSignals: await applicationSignalsResponse.json(),
+        goldenSignals: await goldenSignalsResponse.json(),
+        servers: await serversResponse.json(),
+      })
+    }
+
+    fetchDashboardData()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  const { alerts, applicationSignals, goldenSignals, servers } = dashboardData
+  const isLoading = !alerts || !applicationSignals || !goldenSignals || !servers
+
+  if (isLoading) {
+    return (
+      <Panel className="min-h-64 bg-gray-900/30">
+        <p className="text-sm text-[#6b7280]">Loading application health data...</p>
+      </Panel>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <p className="text-sm font-medium uppercase tracking-wide text-[#6b7280]">
@@ -526,12 +586,20 @@ function AppHealthDashboard({ onServerSelect }) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {ENVS.map((env) => (
-          <EnvColumn key={env} env={env} onServerSelect={onServerSelect} />
+          <EnvColumn
+            key={env}
+            alerts={alerts}
+            applicationSignals={applicationSignals}
+            env={env}
+            goldenSignals={goldenSignals}
+            servers={servers}
+            onServerSelect={onServerSelect}
+          />
         ))}
       </div>
 
       <section className="border-t border-gray-800 pt-6">
-        <ServerResourceOverview onServerSelect={onServerSelect} />
+        <ServerResourceOverview servers={servers} onServerSelect={onServerSelect} />
       </section>
     </div>
   )

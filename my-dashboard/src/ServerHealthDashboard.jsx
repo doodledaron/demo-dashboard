@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import {
   CartesianGrid,
   Legend,
@@ -12,8 +13,6 @@ import {
 import ErrorStatPanel from './ErrorStatPanel'
 import Panel from './Panel'
 import StatCard from './StatCard'
-import { servers } from './mockData'
-import { serverMetricsData } from './serverMetrics'
 
 const CHART_COLORS = {
   blue: '#3b82f6',
@@ -494,9 +493,69 @@ function OOMDot(props) {
 }
 
 function ServerHealthDashboard({ serverId }) {
-  const selectedMetrics =
-    serverMetricsData.find((metrics) => metrics.serverId === serverId) ??
-    serverMetricsData[0]
+  const [servers, setServers] = useState(null)
+  const [selectedMetrics, setSelectedMetrics] = useState(null)
+
+  useEffect(() => {
+    let ignore = false
+
+    async function fetchServers() {
+      const response = await fetch('/api/servers')
+      const nextServers = await response.json()
+
+      if (!ignore) {
+        setServers(nextServers)
+      }
+    }
+
+    fetchServers()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let ignore = false
+
+    async function fetchSelectedMetrics() {
+      const response = await fetch(`/api/server-metrics/${serverId}`)
+
+      if (response.ok) {
+        const metrics = await response.json()
+
+        if (!ignore) {
+          setSelectedMetrics(metrics)
+        }
+
+        return
+      }
+
+      if (response.status === 404) {
+        const allMetricsResponse = await fetch('/api/server-metrics')
+        const allMetrics = await allMetricsResponse.json()
+
+        if (!ignore) {
+          setSelectedMetrics(allMetrics[0] ?? null)
+        }
+      }
+    }
+
+    fetchSelectedMetrics()
+
+    return () => {
+      ignore = true
+    }
+  }, [serverId])
+
+  if (!servers || !selectedMetrics) {
+    return (
+      <Panel className="min-h-64 bg-gray-900/30">
+        <p className="text-sm text-[#6b7280]">Loading server health data...</p>
+      </Panel>
+    )
+  }
+
   const currentCpu = last(selectedMetrics.cpu.usage)
   const currentMemory = last(selectedMetrics.memory.usage)
   const currentDisk = last(selectedMetrics.disk.usage)

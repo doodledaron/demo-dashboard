@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import AppHealthDashboard from './AppHealthDashboard'
 import AppStatusSummaryPanel from './AppStatusSummaryPanel'
 import AvailabilityTrendPanel from './AvailabilityTrendPanel'
@@ -6,7 +6,6 @@ import CriticalIssuesPanel from './CriticalIssuesPanel'
 import Panel from './Panel'
 import ServerHealthDashboard from './ServerHealthDashboard'
 import StatCard from './StatCard'
-import { alerts, availabilityTimeSeries, servers } from './mockData'
 
 const dashboards = [
   {
@@ -33,7 +32,15 @@ const average = (values) =>
 
 const formatPercent = (value) => `${value.toFixed(1)}%`
 
-function L1SupportDashboard({ onAppSelect }) {
+function L1SupportDashboard({ alerts, availabilityTimeSeries, servers, onAppSelect }) {
+  if (!alerts || !availabilityTimeSeries || !servers) {
+    return (
+      <Panel className="min-h-64 bg-gray-900/30">
+        <p className="text-sm text-[#6b7280]">Loading dashboard data...</p>
+      </Panel>
+    )
+  }
+
   const uptimeAverage = average(servers.map((server) => server.uptime))
   const availabilityAverage = average(
     availabilityTimeSeries.map((entry) => entry.availability),
@@ -99,9 +106,43 @@ function App() {
   const [activeDashboardId, setActiveDashboardId] = useState(dashboards[0].id)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [selectedServerId, setSelectedServerId] = useState('server-01')
+  const [l1Data, setL1Data] = useState({
+    alerts: null,
+    availabilityTimeSeries: null,
+    servers: null,
+  })
   const activeDashboard = dashboards.find(
     (dashboard) => dashboard.id === activeDashboardId,
   )
+
+  useEffect(() => {
+    let ignore = false
+
+    async function fetchL1Data() {
+      const [alertsResponse, availabilityResponse, serversResponse] =
+        await Promise.all([
+          fetch('/api/alerts'),
+          fetch('/api/availability'),
+          fetch('/api/servers'),
+        ])
+
+      if (ignore) {
+        return
+      }
+
+      setL1Data({
+        alerts: await alertsResponse.json(),
+        availabilityTimeSeries: await availabilityResponse.json(),
+        servers: await serversResponse.json(),
+      })
+    }
+
+    fetchL1Data()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
 
   const handleServerSelect = (serverId) => {
     setSelectedServerId(serverId)
@@ -217,7 +258,12 @@ function App() {
 
           <div className="flex-1 p-5 sm:p-8">
             {activeDashboardId === 'l1-support' ? (
-              <L1SupportDashboard onAppSelect={handleAppSelect} />
+              <L1SupportDashboard
+                alerts={l1Data.alerts}
+                availabilityTimeSeries={l1Data.availabilityTimeSeries}
+                servers={l1Data.servers}
+                onAppSelect={handleAppSelect}
+              />
             ) : activeDashboardId === 'application-health' ? (
               <AppHealthDashboard onServerSelect={handleServerSelect} />
             ) : activeDashboardId === 'server-health' ? (
